@@ -70,7 +70,7 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
 end)
 
 ----------------------------------------------------
--- DEFAULTS & FEATURE STATES
+-- DEFAULTS TABLE
 ----------------------------------------------------
 local DEFAULTS = {
     Fly = false,
@@ -80,8 +80,7 @@ local DEFAULTS = {
     WalkSpeed = 16,
     InfJump = false,
     JumpHeight = 7.2,
-    Gravity = 196.2,
-    WalkOnWalls = false,
+    Gravity = 196.2
 }
 
 local flying = DEFAULTS.Fly
@@ -177,20 +176,6 @@ end
 
 local ToggleFly, ToggleNoclip, ToggleGod, SliderSpeed, ToggleInfJump, SliderJump, SliderGravity, ToggleWallWalk
 
--- Global Reset Button (Resets all values in MiscTab)
-MiscTab:CreateButton({
-    Name = "RESET ALL",
-    Callback = function()
-        ToggleFly:Set(DEFAULTS.Fly)
-        ToggleNoclip:Set(DEFAULTS.Noclip)
-        ToggleGod:Set(DEFAULTS.GodMode)
-        SliderSpeed:Set(DEFAULTS.WalkSpeed)
-        ToggleInfJump:Set(DEFAULTS.InfJump)
-        SliderJump:Set(DEFAULTS.JumpHeight)
-        SliderGravity:Set(DEFAULTS.Gravity)
-    end,
-})
-
 -- Fly Toggle
 ToggleFly = MiscTab:CreateToggle({
     Name = "Fly",
@@ -203,6 +188,27 @@ ToggleFly = MiscTab:CreateToggle({
         else
             stopFly()
         end
+    end,
+})
+
+-- Fly Speed Slider
+local SliderFlySpeed = MiscTab:CreateSlider({
+    Name = "Fly Speed",
+    Range = {10, 500},
+    Increment = 5,
+    Suffix = "Speed",
+    CurrentValue = DEFAULTS.FlySpeed or 50,
+    Flag = "FlySpeedSlider",
+    Callback = function(Value)
+        flySpeed = Value
+    end,
+})
+
+-- Reset Fly Speed Button
+MiscTab:CreateButton({
+    Name = "Reset Fly Speed",
+    Callback = function()
+        SliderFlySpeed:Set(DEFAULTS.FlySpeed or 50)
     end,
 })
 
@@ -287,6 +293,21 @@ SliderGravity = MiscTab:CreateSlider({
 MiscTab:CreateButton({
     Name = "Reset Gravity",
     Callback = function()
+        SliderGravity:Set(DEFAULTS.Gravity)
+    end,
+})
+
+-- Global Reset Button (Resets all values in MiscTab)
+MiscTab:CreateButton({
+    Name = "RESET ALL",
+    Callback = function()
+        ToggleFly:Set(DEFAULTS.Fly)
+        SliderFlySpeed:Set(DEFAULTS.FlySpeed)
+        ToggleNoclip:Set(DEFAULTS.Noclip)
+        ToggleGod:Set(DEFAULTS.GodMode)
+        SliderSpeed:Set(DEFAULTS.WalkSpeed)
+        ToggleInfJump:Set(DEFAULTS.InfJump)
+        SliderJump:Set(DEFAULTS.JumpHeight)
         SliderGravity:Set(DEFAULTS.Gravity)
     end,
 })
