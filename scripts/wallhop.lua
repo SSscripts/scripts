@@ -122,45 +122,66 @@ end
 
 local function startAutoWallhop()
     wallhopConn = RunService.Heartbeat:Connect(function()
-        -- Ensure player is valid and script is enabled
         if not autoWallhop or wallhopCooldown or not Character or not HumanoidRootPart or not Humanoid then return end
 
-        -- Only allow wallhops if the player is currently in the air
+        -- 1. Must be in the air, and actively pressing keys to move (prevents accidental hops when falling away)
         if Humanoid.FloorMaterial ~= Enum.Material.Air then return end
+        if Humanoid.MoveDirection.Magnitude < 0.1 then return end
 
         local hrp = HumanoidRootPart
         local rayParams = RaycastParams.new()
         rayParams.FilterDescendantsInstances = {Character}
         rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
-        local lookVector = hrp.CFrame.LookVector
-
-        -- Raycast 1: Torso Level (Checking for the wall)
-        local torsoRay = Workspace:Raycast(hrp.Position, lookVector * 2.5, rayParams)
+        -- We use MoveDirection instead of LookVector so it works even if your camera is turned sideways
+        local moveDir = Humanoid.MoveDirection
         
-        -- Raycast 2: Leg Level (Checking if legs are touching something different/nothing)
-        local legOffset = (Humanoid.RigType == Enum.HumanoidRigType.R15) and 2 or 2.5
-        local legPosition = hrp.Position - Vector3.new(0, legOffset, 0)
-        local legRay = Workspace:Raycast(legPosition, lookVector * 2.5, rayParams)
+        -- Calculate the left and right corners of the player's hitbox for wider detection
+        local rightVector = CFrame.lookAt(Vector3.zero, moveDir).RightVector
+        local spread = 0.9 -- Almost the full width of the character
 
-        -- Detection Logic
-        if torsoRay and torsoRay.Instance and torsoRay.Instance.CanCollide then
-            local legHitInstance = legRay and legRay.Instance or nil
-            
-            -- Trigger if Torso hits a wall, but Legs hit thin air OR a different part (the classic wallhop gap)
-            if torsoRay.Instance ~= legHitInstance then
-                wallhopCooldown = true
+        local origins = {
+            Center = hrp.Position,
+            Left = hrp.Position - (rightVector * spread),
+            Right = hrp.Position + (rightVector * spread)
+        }
+
+        local legOffset = (Humanoid.RigType == Enum.HumanoidRigType.R15) and 2 or 2.5
+        local hitNormal = nil
+        local validSeamDetected = false
+
+        -- Scan the 3 points (Left, Center, Right)
+        for _, origin in pairs(origins) do
+            local torsoRay = Workspace:Raycast(origin, moveDir * 2.5, rayParams)
+            local legRay = Workspace:Raycast(origin - Vector3.new(0, legOffset, 0), moveDir * 2.5, rayParams)
+
+            -- If the Torso hits a wall...
+            if torsoRay and torsoRay.Instance and torsoRay.Instance.CanCollide then
+                local legHitInstance = legRay and legRay.Instance or nil
                 
-                triggerProceduralWallKick(Character, torsoRay.Normal)
-                
-                -- Cooldown duration (0.5s prevents flying up walls infinitely)
-                task.delay(0.5, function()
-                    wallhopCooldown = false
-                end)
+                -- ...And the Legs hit a completely different part, or hit empty air (a seam/gap)
+                if torsoRay.Instance ~= legHitInstance then
+                    validSeamDetected = true
+                    hitNormal = torsoRay.Normal
+                    break -- We found a seam, no need to check the other rays
+                end
             end
+        end
+
+        -- Execute the Wallhop
+        if validSeamDetected and hitNormal then
+            wallhopCooldown = true
+            
+            triggerProceduralWallKick(Character, hitNormal)
+            
+            -- slightly longer cooldown (0.6s) to ensure the animation finishes and prevents spamming
+            task.delay(0.6, function()
+                wallhopCooldown = false
+            end)
         end
     end)
 end
+
 
 local function stopAutoWallhop()
     if wallhopConn then wallhopConn:Disconnect() end
