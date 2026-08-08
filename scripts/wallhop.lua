@@ -1,5 +1,7 @@
+-- Loading RayField
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
+-- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -15,17 +17,16 @@ local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
 local VirtualUser = game:GetService("VirtualUser")
 
-
-
+-- Window
 local Window = Rayfield:CreateWindow({
-   Name = "Wallhop Script",
+   Name = "SefScript Hub",
    Icon = nil,
-   LoadingTitle = "SefScript Hub",
+   LoadingTitle = "SefScript Hub | Wallhop",
    LoadingSubtitle = "by SefScript",
-   ShowText = "Wallhop",
+   ShowText = "SefScript Hub",
    Theme = "Default",
 
-   ToggleUIKeybind = "S",
+   ToggleUIKeybind = "K",
 
    DisableRayfieldPrompts = false,
    DisableBuildWarnings = false,
@@ -54,11 +55,13 @@ local Window = Rayfield:CreateWindow({
    }
 })
 
+-- Tab Creation
 local HomeTab = Window:CreateTab("Home", nil)
 local MiscTab = Window:CreateTab("Misc", nil)
 local SettingsTab = Window:CreateTab("Settings", nil)
 local ExperimentalTab = Window:CreateTab("Experimental")
 
+-- Section Creation
 local HomeSection = HomeTab:CreateSection("Wallhop")
 local MiscSection = MiscTab:CreateSection("Misc")
 local ExperimentalSection = ExperimentalTab:CreateSection("Not Recommended to Use.")
@@ -70,9 +73,9 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
 end)
 
-----------------------------------------------------
--- DEFAULTS TABLE
-----------------------------------------------------
+-- | MISC TAB |
+
+-- Misc Defaults
 local DEFAULTS = {
     Fly = false,
     FlySpeed = 50,
@@ -92,9 +95,7 @@ local infJump = DEFAULTS.InfJump
 local walkOnWalls = DEFAULTS.WalkOnWalls
 local bodyVel, bodyGyro
 
-----------------------------------------------------
--- BACKGROUND HANDLERS
-----------------------------------------------------
+-- Background Handlers
 
 -- God Mode Loop
 RunService.RenderStepped:Connect(function()
@@ -171,9 +172,7 @@ local function stopFly()
     if Humanoid then Humanoid.PlatformStand = false end
 end
 
-----------------------------------------------------
--- MISC TAB CONTROLS & RESETS
-----------------------------------------------------
+-- MISC INTERACTION
 
 local ToggleFly, ToggleNoclip, ToggleGod, SliderSpeed, ToggleInfJump, SliderJump, SliderGravity, ToggleWallWalk
 
@@ -313,6 +312,8 @@ MiscTab:CreateButton({
     end,
 })
 
+-- | SETTINGS |
+
 -- Settings States
 local antiFling = false
 local antiAFK = false
@@ -320,9 +321,7 @@ local freeCam = false
 local fullbright = false
 local lowGraphics = false
 
-----------------------------------------------------
--- BACKGROUND HANDLERS
-----------------------------------------------------
+-- Background Handlers
 
 -- Anti-Fling Loop
 RunService.Stepped:Connect(function()
@@ -436,9 +435,7 @@ local function stopFreeCam()
     Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
 end
 
-----------------------------------------------------
--- SETTINGS TAB CONTROLS
-----------------------------------------------------
+-- SETTINGS INTERACTION
 
 -- 1. Anti-Fling
 SettingsTab:CreateToggle({
@@ -627,6 +624,8 @@ ToggleNoclip = ExperimentalTab:CreateToggle({
     end,
 })
 
+-- | MISCELLANEOUS |
+-- Notify Loaded
 Rayfield:Notify({
    Title = "Successfully loaded Wallhop Script.",
    Content = "Loaded.",
