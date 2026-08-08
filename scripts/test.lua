@@ -71,7 +71,7 @@ local SettingsTab = Window:CreateTab("Settings", nil)
 local ExperimentalTab = Window:CreateTab("Experimental")
 
 -- Section Creation
-local HomeSection = HomeTab:CreateSection("Time Bomb Duels")
+local HomeSection = HomeTab:CreateSection("TimeBomb Duels AI")
 local MiscSection = MiscTab:CreateSection("Misc")
 local ExperimentalSection = ExperimentalTab:CreateSection("Not Recommended to Use.")
 
@@ -84,10 +84,8 @@ end)
 
 -- | HOME |
 
--- AI Configuration and Neural Engine State
 local AIConfig = {
     AutoPlayEnabled = false,
-    WallhopEnabled = false,
     Provider = "CustomNeural",
     APIKey = "",
     Endpoint = "",
@@ -185,7 +183,6 @@ function AIAPIBridge:QueryTacticalDecision(gameStateData)
     end
 end
 
--- Helper Functions for AI
 local function getNearestEnemy()
     local nearestEnemy = nil
     local shortestDistance = math.huge
@@ -235,7 +232,6 @@ local function hasBombTool()
     return false
 end
 
--- Auto Play Core Loop
 local autoPlayConn
 local function toggleAutoPlay(state)
     AIConfig.AutoPlayEnabled = state
@@ -274,125 +270,7 @@ local function toggleAutoPlay(state)
     end
 end
 
--- Wallhop Engine
-local wallhopConn
-local wallhopCooldown = false
-local wallhopDetectionRange = 4.0
-local wallhopClimbPower = Vector3.new(0, 42, 0)
-
-local function triggerAdvancedWallhopAnimation(char)
-    local h = char:FindFirstChildOfClass("Humanoid")
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not h or not hrp then return end
-
-    local animInfo = TweenInfo.new(0.15, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out, 0, true, 0)
-    local joints = {}
-
-    if h.RigType == Enum.HumanoidRigType.R15 then
-        local lower = char:FindFirstChild("LowerTorso")
-        local upper = char:FindFirstChild("UpperTorso")
-        if lower and upper then
-            joints = {
-                Root = lower:FindFirstChild("Root"),
-                Waist = upper:FindFirstChild("Waist"),
-                RightHip = char:FindFirstChild("RightUpperLeg") and char.RightUpperLeg:FindFirstChild("RightHip"),
-                LeftHip = char:FindFirstChild("LeftUpperLeg") and char.LeftUpperLeg:FindFirstChild("LeftHip"),
-                RightArm = char:FindFirstChild("RightUpperArm") and char.RightUpperArm:FindFirstChild("RightShoulder"),
-                LeftArm = char:FindFirstChild("LeftUpperArm") and char.LeftUpperArm:FindFirstChild("LeftShoulder")
-            }
-        end
-    else
-        local torso = char:FindFirstChild("Torso")
-        if torso then
-            joints = {
-                Root = hrp:FindFirstChild("RootJoint"),
-                RightHip = torso:FindFirstChild("Right Hip"),
-                LeftHip = torso:FindFirstChild("Left Hip"),
-                RightArm = torso:FindFirstChild("Right Shoulder"),
-                LeftArm = torso:FindFirstChild("Left Shoulder")
-            }
-        end
-    end
-
-    local poses = {
-        Root = CFrame.Angles(math.rad(-20), math.rad(10), 0),
-        Waist = CFrame.Angles(math.rad(-15), 0, 0),
-        RightHip = CFrame.Angles(math.rad(65), 0, math.rad(-10)),
-        LeftHip = CFrame.Angles(math.rad(-30), 0, 0),
-        RightArm = CFrame.Angles(math.rad(45), math.rad(-20), 0),
-        LeftArm = CFrame.Angles(math.rad(-50), math.rad(20), 0)
-    }
-
-    for name, joint in pairs(joints) do
-        if joint and poses[name] then
-            local targetC0 = joint.C0 * poses[name]
-            TweenService:Create(joint, animInfo, {C0 = targetC0}):Play()
-        end
-    end
-end
-
-local function toggleWallhop(state)
-    AIConfig.WallhopEnabled = state
-    if state then
-        wallhopConn = RunService.Heartbeat:Connect(function()
-            if wallhopCooldown or not Character or not HumanoidRootPart or not Humanoid then return end
-            if Humanoid.FloorMaterial ~= Enum.Material.Air then return end
-            if Humanoid.MoveDirection.Magnitude < 0.1 then return end
-
-            local hrp = HumanoidRootPart
-            local rayParams = RaycastParams.new()
-            rayParams.FilterDescendantsInstances = {Character}
-            rayParams.FilterType = Enum.RaycastFilterType.Exclude
-
-            local moveDir = Humanoid.MoveDirection
-            local rightVector = CFrame.lookAt(Vector3.zero, moveDir).RightVector
-            local spread = 1.4
-            
-            local origins = {
-                Center = hrp.Position,
-                Left = hrp.Position - (rightVector * spread),
-                Right = hrp.Position + (rightVector * spread)
-            }
-
-            local legOffset = (Humanoid.RigType == Enum.HumanoidRigType.R15) and 2 or 2.5
-            local validWallFound = false
-            local detectedNormal = nil
-
-            for _, origin in pairs(origins) do
-                local angledDir = (moveDir + (rightVector * 0.3)).Unit
-                local torsoRay = Workspace:Raycast(origin, angledDir * wallhopDetectionRange, rayParams)
-                local legRay = Workspace:Raycast(origin - Vector3.new(0, legOffset, 0), angledDir * wallhopDetectionRange, rayParams)
-
-                if torsoRay and torsoRay.Instance and torsoRay.Instance.CanCollide then
-                    local legHitInstance = legRay and legRay.Instance or nil
-                    if torsoRay.Instance ~= legHitInstance then
-                        validWallFound = true
-                        detectedNormal = torsoRay.Normal
-                        break
-                    end
-                end
-            end
-
-            if validWallFound and detectedNormal then
-                wallhopCooldown = true
-                local tangent = (moveDir - (detectedNormal * moveDir:Dot(detectedNormal))).Unit
-                hrp.AssemblyLinearVelocity = wallhopClimbPower + (tangent * 18) + (detectedNormal * 5)
-                Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                triggerAdvancedWallhopAnimation(Character)
-                
-                task.delay(0.35, function()
-                    wallhopCooldown = false
-                end)
-            end
-        end)
-    else
-        if wallhopConn then wallhopConn:Disconnect() end
-        wallhopCooldown = false
-    end
-end
-
--- Home Tab GUI Controls (20+ AI Customizations)
-HomeSection:CreateToggle({
+HomeTab:CreateToggle({
     Name = "Auto Play (Timebomb AI)",
     CurrentValue = false,
     Flag = "AutoPlayToggle",
@@ -401,16 +279,7 @@ HomeSection:CreateToggle({
     end,
 })
 
-HomeSection:CreateToggle({
-    Name = "Advanced Wallhop Engine",
-    CurrentValue = false,
-    Flag = "WallhopToggle",
-    Callback = function(Value)
-        toggleWallhop(Value)
-    end,
-})
-
-HomeSection:CreateDropdown({
+HomeTab:CreateDropdown({
     Name = "AI Provider",
     Values = {"CustomNeural", "Gemini", "OpenAI", "OpenRouter", "Ollama"},
     CurrentValue = "CustomNeural",
@@ -420,7 +289,7 @@ HomeSection:CreateDropdown({
     end,
 })
 
-HomeSection:CreateTextbox({
+HomeTab:CreateTextbox({
     Name = "AI API Key",
     PlaceholderText = "Enter API Key...",
     Flag = "APIKeyBox",
@@ -429,7 +298,7 @@ HomeSection:CreateTextbox({
     end,
 })
 
-HomeSection:CreateTextbox({
+HomeTab:CreateTextbox({
     Name = "API Endpoint URL",
     PlaceholderText = "https://...",
     Flag = "EndpointBox",
@@ -438,7 +307,7 @@ HomeSection:CreateTextbox({
     end,
 })
 
-HomeSection:CreateTextbox({
+HomeTab:CreateTextbox({
     Name = "AI Model Name",
     PlaceholderText = "e.g., gemini-2.5-flash",
     Flag = "ModelBox",
@@ -447,7 +316,7 @@ HomeSection:CreateTextbox({
     end,
 })
 
-HomeSection:CreateSlider({
+HomeTab:CreateSlider({
     Name = "AI Reaction Delay",
     Range = {0.05, 0.5},
     Increment = 0.01,
@@ -459,7 +328,7 @@ HomeSection:CreateSlider({
     end,
 })
 
-HomeSection:CreateSlider({
+HomeTab:CreateSlider({
     Name = "Path Smoothing Factor",
     Range = {0.05, 1.0},
     Increment = 0.05,
@@ -471,7 +340,7 @@ HomeSection:CreateSlider({
     end,
 })
 
-HomeSection:CreateSlider({
+HomeTab:CreateSlider({
     Name = "Evasion Jitter Intensity",
     Range = {0.0, 5.0},
     Increment = 0.1,
@@ -483,7 +352,7 @@ HomeSection:CreateSlider({
     end,
 })
 
-HomeSection:CreateSlider({
+HomeTab:CreateSlider({
     Name = "Prediction Lead Time",
     Range = {0.0, 1.0},
     Increment = 0.05,
@@ -495,7 +364,7 @@ HomeSection:CreateSlider({
     end,
 })
 
-HomeSection:CreateSlider({
+HomeTab:CreateSlider({
     Name = "Safe Evade Distance",
     Range = {10, 50},
     Increment = 1,
@@ -507,7 +376,7 @@ HomeSection:CreateSlider({
     end,
 })
 
-HomeSection:CreateSlider({
+HomeTab:CreateSlider({
     Name = "Chase Speed Multiplier",
     Range = {16, 100},
     Increment = 2,
@@ -519,7 +388,7 @@ HomeSection:CreateSlider({
     end,
 })
 
-HomeSection:CreateSlider({
+HomeTab:CreateSlider({
     Name = "Evade Speed Multiplier",
     Range = {16, 100},
     Increment = 2,
@@ -531,7 +400,7 @@ HomeSection:CreateSlider({
     end,
 })
 
-HomeSection:CreateSlider({
+HomeTab:CreateSlider({
     Name = "Neural Weight 1 (Distance)",
     Range = {-1.0, 1.0},
     Increment = 0.05,
@@ -543,7 +412,7 @@ HomeSection:CreateSlider({
     end,
 })
 
-HomeSection:CreateSlider({
+HomeTab:CreateSlider({
     Name = "Neural Weight 2 (Bomb)",
     Range = {-1.0, 1.0},
     Increment = 0.05,
@@ -555,7 +424,7 @@ HomeSection:CreateSlider({
     end,
 })
 
-HomeSection:CreateSlider({
+HomeTab:CreateSlider({
     Name = "Neural Weight 3 (Enemy Speed)",
     Range = {-1.0, 1.0},
     Increment = 0.05,
@@ -567,7 +436,7 @@ HomeSection:CreateSlider({
     end,
 })
 
-HomeSection:CreateSlider({
+HomeTab:CreateSlider({
     Name = "Neural Weight 4 (Health)",
     Range = {-1.0, 1.0},
     Increment = 0.05,
@@ -579,7 +448,7 @@ HomeSection:CreateSlider({
     end,
 })
 
-HomeSection:CreateSlider({
+HomeTab:CreateSlider({
     Name = "Neural Bias Offset",
     Range = {-1.0, 1.0},
     Increment = 0.05,
@@ -591,7 +460,7 @@ HomeSection:CreateSlider({
     end,
 })
 
-HomeSection:CreateToggle({
+HomeTab:CreateToggle({
     Name = "Target Nearest Enemy Only",
     CurrentValue = true,
     Flag = "TargetNearestToggle",
@@ -600,7 +469,7 @@ HomeSection:CreateToggle({
     end,
 })
 
-HomeSection:CreateToggle({
+HomeTab:CreateToggle({
     Name = "Auto-Equip Bomb Tool",
     CurrentValue = true,
     Flag = "AutoEquipToggle",
@@ -609,7 +478,7 @@ HomeSection:CreateToggle({
     end,
 })
 
-HomeSection:CreateButton({
+HomeTab:CreateButton({
     Name = "Reset AI Configuration",
     Callback = function()
         AIConfig.ReactionDelay = 0.14
@@ -621,7 +490,6 @@ HomeSection:CreateButton({
         CustomNeuralNetwork.Bias = 0.05
     end,
 })
-
 
 -- | MISC TAB |
 
@@ -642,7 +510,10 @@ local flySpeed = DEFAULTS.FlySpeed
 local noclip = DEFAULTS.Noclip
 local godmode = DEFAULTS.GodMode
 local infJump = DEFAULTS.InfJump
+local walkOnWalls = DEFAULTS.WalkOnWalls
 local bodyVel, bodyGyro
+
+-- Background Handlers
 
 -- God Mode Loop
 RunService.RenderStepped:Connect(function()
@@ -659,7 +530,9 @@ UserInputService.JumpRequest:Connect(function()
 end)
 
 -- Fly Function
-local flyConn
+local flying = false
+local flySpeed = 50
+local flyConn, bodyVel, bodyGyro
 
 local function startFly()
     if not HumanoidRootPart or not Humanoid then return end
@@ -689,12 +562,15 @@ local function startFly()
             local flatCamLook = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
             local flatCamRight = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
 
+            -- Calculate forward/right directional scalar from joystick vector
             local forwardAmount = rawMove:Dot(flatCamLook)
             local rightAmount = rawMove:Dot(flatCamRight)
 
+            -- Reconstruct full 3D direction vector aligned to camera tilt
             moveDir = (camCF.LookVector * forwardAmount) + (camCF.RightVector * rightAmount)
         end
 
+        -- Height Controls (Mobile Jump button / PC Keyboards)
         if UserInputService:IsKeyDown(Enum.KeyCode.Space) or Humanoid.Jump then 
             moveDir = moveDir + Vector3.new(0, 1, 0) 
         end
@@ -715,8 +591,10 @@ local function stopFly()
 end
 
 -- MISC INTERACTION
-local ToggleFly, ToggleNoclip, ToggleGod, SliderSpeed, ToggleInfJump, SliderJump, SliderGravity
 
+local ToggleFly, ToggleNoclip, ToggleGod, SliderSpeed, ToggleInfJump, SliderJump, SliderGravity, ToggleWallWalk
+
+-- Fly Toggle
 ToggleFly = MiscTab:CreateToggle({
     Name = "Fly",
     CurrentValue = DEFAULTS.Fly,
@@ -731,6 +609,7 @@ ToggleFly = MiscTab:CreateToggle({
     end,
 })
 
+-- Fly Speed Slider
 local SliderFlySpeed = MiscTab:CreateSlider({
     Name = "Fly Speed",
     Range = {10, 500},
@@ -743,6 +622,7 @@ local SliderFlySpeed = MiscTab:CreateSlider({
     end,
 })
 
+-- Reset Fly Speed Button
 MiscTab:CreateButton({
     Name = "Reset Fly Speed",
     Callback = function()
@@ -750,6 +630,7 @@ MiscTab:CreateButton({
     end,
 })
 
+-- God Mode Controls
 ToggleGod = MiscTab:CreateToggle({
     Name = "God Mode",
     CurrentValue = DEFAULTS.GodMode,
@@ -759,6 +640,7 @@ ToggleGod = MiscTab:CreateToggle({
     end,
 })
 
+-- WalkSpeed Slider & Reset Button
 SliderSpeed = MiscTab:CreateSlider({
     Name = "WalkSpeed",
     Range = {16, 250},
@@ -780,6 +662,7 @@ MiscTab:CreateButton({
     end,
 })
 
+-- Infinite Jump Controls
 ToggleInfJump = MiscTab:CreateToggle({
     Name = "Infinite Jump",
     CurrentValue = DEFAULTS.InfJump,
@@ -789,6 +672,7 @@ ToggleInfJump = MiscTab:CreateToggle({
     end,
 })
 
+-- JumpHeight Slider & Reset Button
 SliderJump = MiscTab:CreateSlider({
     Name = "JumpHeight",
     Range = {7.2, 300},
@@ -811,6 +695,7 @@ MiscTab:CreateButton({
     end,
 })
 
+-- Gravity Slider & Reset Button
 SliderGravity = MiscTab:CreateSlider({
     Name = "Gravity",
     Range = {0, 196.2},
@@ -830,6 +715,7 @@ MiscTab:CreateButton({
     end,
 })
 
+-- Global Reset Button (Resets all values in MiscTab)
 MiscTab:CreateButton({
     Name = "RESET ALL",
     Callback = function()
@@ -844,15 +730,18 @@ MiscTab:CreateButton({
     end,
 })
 
-
 -- | SETTINGS |
 
+-- Settings States
 local antiFling = false
 local antiAFK = false
 local freeCam = false
 local fullbright = false
 local lowGraphics = false
 
+-- Background Handlers
+
+-- Anti-Fling Loop
 RunService.Stepped:Connect(function()
     if antiFling then
         for _, player in pairs(Players:GetPlayers()) do
@@ -867,6 +756,7 @@ RunService.Stepped:Connect(function()
     end
 end)
 
+-- Anti-AFK Prevention
 LocalPlayer.Idled:Connect(function()
     if antiAFK then
         VirtualUser:CaptureController()
@@ -874,6 +764,8 @@ LocalPlayer.Idled:Connect(function()
     end
 end)
 
+-- FreeCam Logic
+local freeCam = false
 local freeCamConn, touchBeganConn, inputConn, touchEndedConn
 local camYaw, camPitch = 0, 0
 local sensitivity = 0.3
@@ -888,38 +780,47 @@ local function startFreeCam()
     camYaw = math.deg(ry)
     camPitch = math.deg(rx)
 
+    -- Track initial touch outside the left dynamic thumbstick zone
     touchBeganConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if not freeCam then return end
         if input.UserInputType == Enum.UserInputType.Touch then
             local viewportSize = cam.ViewportSize
+            -- Ignores touches originating on the left 35% of screen (Joystick Zone)
             if input.Position.X > (viewportSize.X * 0.35) and not activeCameraTouch then
                 activeCameraTouch = input
             end
         end
     end)
 
+    -- Handle Rotation (Mouse or Right-Side Touch Drag)
     inputConn = UserInputService.InputChanged:Connect(function(input)
         if not freeCam then return end
+
         local delta = Vector2.zero
+
         if input.UserInputType == Enum.UserInputType.MouseMovement then
             delta = input.Delta
         elseif input.UserInputType == Enum.UserInputType.Touch and input == activeCameraTouch then
             delta = input.Delta
         end
+
         if delta ~= Vector2.zero then
             camYaw = camYaw - (delta.X * sensitivity)
             camPitch = math.clamp(camPitch - (delta.Y * sensitivity), -85, 85)
         end
     end)
 
+    -- Clear camera touch tracking when touch releases
     touchEndedConn = UserInputService.InputEnded:Connect(function(input)
         if input == activeCameraTouch then
             activeCameraTouch = nil
         end
     end)
 
+    -- Movement Loop
     freeCamConn = RunService.RenderStepped:Connect(function()
         if not freeCam then return end
+
         local rotCFrame = CFrame.Angles(0, math.rad(camYaw), 0) * CFrame.Angles(math.rad(camPitch), 0, 0)
         local moveDir = Vector3.zero
 
@@ -927,7 +828,11 @@ local function startFreeCam()
         if rawMove.Magnitude > 0 then
             local flatCamLook = Vector3.new(rotCFrame.LookVector.X, 0, rotCFrame.LookVector.Z).Unit
             local flatCamRight = Vector3.new(rotCFrame.RightVector.X, 0, rotCFrame.RightVector.Z).Unit
-            moveDir = (rotCFrame.LookVector * rawMove:Dot(flatCamLook)) + (rotCFrame.RightVector * rawMove:Dot(flatCamRight))
+
+            local forwardAmount = rawMove:Dot(flatCamLook)
+            local rightAmount = rawMove:Dot(flatCamRight)
+
+            moveDir = (rotCFrame.LookVector * forwardAmount) + (rotCFrame.RightVector * rightAmount)
         end
 
         if UserInputService:IsKeyDown(Enum.KeyCode.E) then moveDir = moveDir + Vector3.new(0, 1, 0) end
@@ -948,6 +853,9 @@ local function stopFreeCam()
     Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
 end
 
+-- SETTINGS INTERACTION
+
+-- 1. Anti-Fling
 SettingsTab:CreateToggle({
     Name = "Anti-Fling",
     CurrentValue = false,
@@ -957,6 +865,7 @@ SettingsTab:CreateToggle({
     end,
 })
 
+-- 2. Anti-AFK
 SettingsTab:CreateToggle({
     Name = "Anti-AFK",
     CurrentValue = false,
@@ -966,7 +875,8 @@ SettingsTab:CreateToggle({
     end,
 })
 
-SettingsTab:CreateToggle({
+-- 3. FreeCam
+ToggleFreeCam = SettingsTab:CreateToggle({
     Name = "FreeCam",
     CurrentValue = false,
     Flag = "FreeCamToggle",
@@ -980,6 +890,7 @@ SettingsTab:CreateToggle({
     end,
 })
 
+-- 4. Fullbright
 SettingsTab:CreateToggle({
     Name = "Fullbright",
     CurrentValue = false,
@@ -998,6 +909,7 @@ SettingsTab:CreateToggle({
     end,
 })
 
+-- 5. Disable Shadows
 SettingsTab:CreateToggle({
     Name = "Disable Shadows",
     CurrentValue = false,
@@ -1007,6 +919,7 @@ SettingsTab:CreateToggle({
     end,
 })
 
+-- 6. Low Graphics / Potato Mode
 SettingsTab:CreateToggle({
     Name = "Low Graphics Mode",
     CurrentValue = false,
@@ -1021,6 +934,7 @@ SettingsTab:CreateToggle({
     end,
 })
 
+-- 7. Custom FOV
 SettingsTab:CreateSlider({
     Name = "Field of View (FOV)",
     Range = {70, 120},
@@ -1033,6 +947,7 @@ SettingsTab:CreateSlider({
     end,
 })
 
+-- 8. Max FPS Cap
 SettingsTab:CreateSlider({
     Name = "Max FPS Cap",
     Range = {30, 240},
@@ -1047,6 +962,7 @@ SettingsTab:CreateSlider({
     end,
 })
 
+-- 9. Rejoin Server
 SettingsTab:CreateButton({
     Name = "Rejoin Server",
     Callback = function()
@@ -1054,6 +970,7 @@ SettingsTab:CreateButton({
     end,
 })
 
+-- 10. Server Hop
 SettingsTab:CreateButton({
     Name = "Server Hop",
     Callback = function()
@@ -1071,22 +988,24 @@ SettingsTab:CreateButton({
     end,
 })
 
+-- 11. Destroy Interface
 SettingsTab:CreateButton({
-    Name = "Destroy Interface",
+    Name = "Destroy GUI",
     Callback = function()
         Rayfield:Destroy()
     end,
 })
 
-
 -- | EXPERIMENTAL |
 
+-- Noclip Loop
 local noclip = false
 local noclipConn
 
 local function startNoclip()
     noclipConn = RunService.Stepped:Connect(function()
         if not noclip or not Character then return end
+
         for _, part in pairs(Character:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
@@ -1096,7 +1015,9 @@ local function startNoclip()
 end
 
 local function stopNoclip()
-    if noclipConn then noclipConn:Disconnect() end
+    if noclipConn then
+        noclipConn:Disconnect()
+    end
     if Character then
         for _, part in pairs(Character:GetDescendants()) do
             if part:IsA("BasePart") then
@@ -1106,6 +1027,7 @@ local function stopNoclip()
     end
 end
 
+-- Noclip Toggle
 ToggleNoclip = ExperimentalTab:CreateToggle({
     Name = "Noclip",
     CurrentValue = DEFAULTS.Noclip,
@@ -1120,10 +1042,10 @@ ToggleNoclip = ExperimentalTab:CreateToggle({
     end,
 })
 
-
 -- | MISCELLANEOUS |
+-- Notify Loaded
 Rayfield:Notify({
-   Title = "Successfully loaded Wallhop Script.",
+   Title = "Successfully loaded TimeBomb Duels Script.",
    Content = "Loaded.",
    Duration = 5,
    Image = nil,
