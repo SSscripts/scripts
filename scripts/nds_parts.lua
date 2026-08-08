@@ -26,7 +26,7 @@ local Window = Rayfield:CreateWindow({
     },
     KeySystem = true,
     KeySettings = {
-nex        Title = "SefScriptsHub",
+        Title = "SefScriptsHub",
         Subtitle = "Security Key Verification",
         Note = "Enter Access Key: SUBSCRIBE",
         FileName = "SefAccessKey",
