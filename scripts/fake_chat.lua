@@ -1,3 +1,5 @@
+if not game:IsLoaded() then game.Loaded:Wait() end
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -21,19 +23,71 @@ local Window = Rayfield:CreateWindow({
     }
 })
 
-getgenv().SefTabs = {
-    Roles = Window:CreateTab("Roles", 4483362458),
-    Activities = Window:CreateTab("Activities", 4483362458),
-    ESP = Window:CreateTab("ESP", 4483362458),
-    Movement = Window:CreateTab("Movement", 4483362458),
-    Voting = Window:CreateTab("Voting", 4483362458),
-    Settings = Window:CreateTab("Settings", 4483362458)
-}
+local Players = game:GetService("Players")
+local ChatService = game:GetService("Chat")
 
-getgenv().SefState = {
-    Config = {
-        ESPEnabled = false,
-        TracersEnabled = false,
+-- Create a dedicated tab for the chat utility within the Rayfield window
+local ChatTab = Window:CreateTab("Chat Utils", 4483362458)
+
+ChatTab:CreateSection("Fake Chat Bubble Configuration")
+
+local targetName = ""
+local chatMessage = ""
+
+-- Input field to target the player by name
+ChatTab:CreateInput({
+    Name = "Target Player Name",
+    PlaceholderText = "Type exact player name...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        targetName = text
+    end,
+})
+
+-- Input field to specify the message content to display
+ChatTab:CreateInput({
+    Name = "Message Content",
+    PlaceholderText = "Type fake chat message...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        chatMessage = text
+    end,
+})
+
+-- Button to trigger the chat bubble over the target player's head securely
+ChatTab:CreateButton({
+    Name = "Send Fake Bubble",
+    Callback = function()
+        local target = Players:FindFirstChild(targetName)
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            pcall(function()
+                ChatService:Chat(target.Character.Head, chatMessage, Enum.ChatColor.White)
+            end)
+            Rayfield:Notify({
+                Title = "Success",
+                Content = "Fake chat bubble sent to " .. target.Name,
+                Duration = 3,
+                Image = 4483362458
+            })
+        else
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "Player not found or character missing head!",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+Rayfield:LoadConfiguration()
+
+Rayfield:Notify({
+    Title = "SefScriptsHub Loaded",
+    Content = "Fake chat bubble utility initialized successfully!",
+    Duration = 5,
+    Image = 4483362458
+})
         Threshold = 60,
         VelocityAlerts = true,
         NameESP = true,
