@@ -73,6 +73,117 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
 end)
 
+-- | HOME |
+
+-- Background Handlers
+
+-- Wallhop Functions
+local autoWallhop = false
+local wallhopCooldown = false
+local wallhopConn
+
+local function triggerProceduralWallKick(character, hitNormal)
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    -- 1. Parkour Physics Boost (Upward + slightly pushing off the wall normal)
+    local kickForce = Vector3.new(0, 55, 0) + (hitNormal * 12)
+    hrp.AssemblyLinearVelocity = kickForce
+
+    -- 2. Procedural Animation (Joint Manipulation)
+    -- We target the Root and Right Leg joints dynamically for both R6 & R15
+    local rootJoint = hrp:FindFirstChild("RootJoint") or (character:FindFirstChild("LowerTorso") and character.LowerTorso:FindFirstChild("Root"))
+    local rightHip = nil
+    
+    if character:FindFirstChild("RightUpperLeg") then
+        rightHip = character.RightUpperLeg:FindFirstChild("RightHip") -- R15 Rig
+    elseif character:FindFirstChild("Torso") then
+        rightHip = character.Torso:FindFirstChild("Right Hip") -- R6 Rig
+    end
+
+    if rootJoint and rightHip then
+        local originalRootC0 = rootJoint.C0
+        local originalHipC0 = rightHip.C0
+
+        -- Tween parameters: 0.1s to kick, automatically reverses back to original position
+        local kickInfo = TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, 0, true, 0)
+
+        -- Calculate the parkour pose
+        -- Leans torso back slightly (-15 degrees)
+        local rootTarget = originalRootC0 * CFrame.Angles(math.rad(-15), 0, 0) 
+        -- Pulls knee up and plants foot forward
+        local hipTarget = originalHipC0 * CFrame.new(0, 0.4, -0.6) * CFrame.Angles(math.rad(50), 0, 0) 
+
+        -- Play the procedural animation tweens
+        TweenService:Create(rootJoint, kickInfo, {C0 = rootTarget}):Play()
+        TweenService:Create(rightHip, kickInfo, {C0 = hipTarget}):Play()
+    end
+end
+
+local function startAutoWallhop()
+    wallhopConn = RunService.Heartbeat:Connect(function()
+        -- Ensure player is valid and script is enabled
+        if not autoWallhop or wallhopCooldown or not Character or not HumanoidRootPart or not Humanoid then return end
+
+        -- Only allow wallhops if the player is currently in the air
+        if Humanoid.FloorMaterial ~= Enum.Material.Air then return end
+
+        local hrp = HumanoidRootPart
+        local rayParams = RaycastParams.new()
+        rayParams.FilterDescendantsInstances = {Character}
+        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+        local lookVector = hrp.CFrame.LookVector
+
+        -- Raycast 1: Torso Level (Checking for the wall)
+        local torsoRay = Workspace:Raycast(hrp.Position, lookVector * 2.5, rayParams)
+        
+        -- Raycast 2: Leg Level (Checking if legs are touching something different/nothing)
+        local legOffset = (Humanoid.RigType == Enum.HumanoidRigType.R15) and 2 or 2.5
+        local legPosition = hrp.Position - Vector3.new(0, legOffset, 0)
+        local legRay = Workspace:Raycast(legPosition, lookVector * 2.5, rayParams)
+
+        -- Detection Logic
+        if torsoRay and torsoRay.Instance and torsoRay.Instance.CanCollide then
+            local legHitInstance = legRay and legRay.Instance or nil
+            
+            -- Trigger if Torso hits a wall, but Legs hit thin air OR a different part (the classic wallhop gap)
+            if torsoRay.Instance ~= legHitInstance then
+                wallhopCooldown = true
+                
+                triggerProceduralWallKick(Character, torsoRay.Normal)
+                
+                -- Cooldown duration (0.5s prevents flying up walls infinitely)
+                task.delay(0.5, function()
+                    wallhopCooldown = false
+                end)
+            end
+        end
+    end)
+end
+
+local function stopAutoWallhop()
+    if wallhopConn then wallhopConn:Disconnect() end
+    wallhopCooldown = false
+end
+
+-- HOME INTERACTION
+
+-- Wallhop Toggle
+ToggleWallhop = HomeTab:CreateToggle({
+    Name = "Auto Wallhop (Procedural Parkour)",
+    CurrentValue = false,
+    Flag = "AutoWallhopToggle",
+    Callback = function(Value)
+        autoWallhop = Value
+        if autoWallhop then
+            startAutoWallhop()
+        else
+            stopAutoWallhop()
+        end
+    end,
+})
+
 -- | MISC TAB |
 
 -- Misc Defaults
