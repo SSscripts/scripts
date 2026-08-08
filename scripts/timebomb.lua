@@ -6,22 +6,31 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
-
-local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
-local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
 local VirtualUser = game:GetService("VirtualUser")
+local TweenService = game:GetService("TweenService")
+local PathfindingService = game:GetService("PathfindingService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    Character = newChar
+    Humanoid = newChar:WaitForChild("Humanoid")
+    HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
+end)
+
 
 -- Window
 local Window = Rayfield:CreateWindow({
    Name = "SefScript Hub",
    Icon = nil,
-   LoadingTitle = "SefScript Hub | Wallhop",
+   LoadingTitle = "SefScript Hub | TimeBomb Duels",
    LoadingSubtitle = "by SefScript",
    ShowText = "SefScript Hub",
    Theme = "Default",
@@ -77,164 +86,12 @@ end)
 
 -- Background Handlers
 
--- Wallhop Functions
-local autoWallhop = false
-local wallhopCooldown = false
-local wallhopConn
-local wallhopDetectionRange = 4.0
-local wallhopClimbPower = Vector3.new(0, 42, 0)
+-- AI TimeBomb Duels | Player Faking
 
-local function triggerAdvancedWallhopAnimation(character)
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or not hrp then return end
-
-    local animInfo = TweenInfo.new(0.15, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out, 0, true, 0)
-    local joints = {}
-
-    if humanoid.RigType == Enum.HumanoidRigType.R15 then
-        local lower = character:FindFirstChild("LowerTorso")
-        local upper = character:FindFirstChild("UpperTorso")
-        if lower and upper then
-            joints = {
-                Root = lower:FindFirstChild("Root"),
-                Waist = upper:FindFirstChild("Waist"),
-                RightHip = character:FindFirstChild("RightUpperLeg") and character.RightUpperLeg:FindFirstChild("RightHip"),
-                LeftHip = character:FindFirstChild("LeftUpperLeg") and character.LeftUpperLeg:FindFirstChild("LeftHip"),
-                RightArm = character:FindFirstChild("RightUpperArm") and character.RightUpperArm:FindFirstChild("RightShoulder"),
-                LeftArm = character:FindFirstChild("LeftUpperArm") and character.LeftUpperArm:FindFirstChild("LeftShoulder")
-            }
-        end
-    else
-        local torso = character:FindFirstChild("Torso")
-        if torso then
-            joints = {
-                Root = hrp:FindFirstChild("RootJoint"),
-                RightHip = torso:FindFirstChild("Right Hip"),
-                LeftHip = torso:FindFirstChild("Left Hip"),
-                RightArm = torso:FindFirstChild("Right Shoulder"),
-                LeftArm = torso:FindFirstChild("Left Shoulder")
-            }
-        end
-    end
-
-    local poses = {
-        Root = CFrame.Angles(math.rad(-20), math.rad(10), 0),
-        Waist = CFrame.Angles(math.rad(-15), 0, 0),
-        RightHip = CFrame.Angles(math.rad(65), 0, math.rad(-10)),
-        LeftHip = CFrame.Angles(math.rad(-30), 0, 0),
-        RightArm = CFrame.Angles(math.rad(45), math.rad(-20), 0),
-        LeftArm = CFrame.Angles(math.rad(-50), math.rad(20), 0)
-    }
-
-    for name, joint in pairs(joints) do
-        if joint and poses[name] then
-            local targetC0 = joint.C0 * poses[name]
-            TweenService:Create(joint, animInfo, {C0 = targetC0}):Play()
-        end
-    end
-end
-
-local function triggerRhythmicWallhop(character, hrp, hitNormal, moveDir)
-    local tangent = (moveDir - (hitNormal * moveDir:Dot(hitNormal))).Unit
-    local climbVelocity = wallhopClimbPower + (tangent * 18) + (hitNormal * 5)
-    hrp.AssemblyLinearVelocity = climbVelocity
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end
-
-local function startAutoWallhop()
-    wallhopConn = RunService.Heartbeat:Connect(function()
-        if not autoWallhop or wallhopCooldown or not Character or not HumanoidRootPart or not Humanoid then return end
-
-        if Humanoid.FloorMaterial ~= Enum.Material.Air then return end
-        if Humanoid.MoveDirection.Magnitude < 0.1 then return end
-
-        local hrp = HumanoidRootPart
-        local rayParams = RaycastParams.new()
-        rayParams.FilterDescendantsInstances = {Character}
-        rayParams.FilterType = Enum.RaycastFilterType.Exclude
-
-        local moveDir = Humanoid.MoveDirection
-        local rightVector = CFrame.lookAt(Vector3.zero, moveDir).RightVector
-        
-        local spread = 1.4
-        local origins = {
-            Center = hrp.Position,
-            Left = hrp.Position - (rightVector * spread),
-            Right = hrp.Position + (rightVector * spread)
-        }
-
-        local legOffset = (Humanoid.RigType == Enum.HumanoidRigType.R15) and 2 or 2.5
-        local validWallFound = false
-        local detectedNormal = nil
-
-        for _, origin in pairs(origins) do
-            local angledDir = (moveDir + (rightVector * 0.3)).Unit
-            local torsoRay = Workspace:Raycast(origin, angledDir * wallhopDetectionRange, rayParams)
-            local legRay = Workspace:Raycast(origin - Vector3.new(0, legOffset, 0), angledDir * wallhopDetectionRange, rayParams)
-
-            if torsoRay and torsoRay.Instance and torsoRay.Instance.CanCollide then
-                local legHitInstance = legRay and legRay.Instance or nil
-                
-                if torsoRay.Instance ~= legHitInstance then
-                    validWallFound = true
-                    detectedNormal = torsoRay.Normal
-                    break
-                end
-            end
-        end
-
-        if validWallFound and detectedNormal then
-            wallhopCooldown = true
-            
-            triggerRhythmicWallhop(Character, hrp, detectedNormal, moveDir)
-            triggerAdvancedWallhopAnimation(Character)
-            
-            task.delay(0.35, function()
-                wallhopCooldown = false
-            end)
-        end
-    end)
-end
-
-local function stopAutoWallhop()
-    if wallhopConn then wallhopConn:Disconnect() end
-    wallhopCooldown = false
-end
 
 -- HOME INTERACTION
 
--- Wallhop Toggle
-ToggleWallhop = HomeTab:CreateToggle({
-    Name = "Auto Wallhop (Rhythmic Engine)",
-    CurrentValue = false,
-    Flag = "AutoWallhopToggle",
-    Callback = function(Value)
-        autoWallhop = Value
-        if autoWallhop then
-            startAutoWallhop()
-        else
-            stopAutoWallhop()
-        end
-    end,
-})
 
--- Wallhop Detection Slider
-HomeTab:CreateSlider({
-    Name = "Wallhop Detection Range",
-    Range = {1, 10},
-    Increment = 0.5,
-    Suffix = "Studs",
-    CurrentValue = wallhopDetectionRange,
-    Flag = "WallhopRangeSlider",
-    Callback = function(Value)
-        wallhopDetectionRange = Value
-    end,
-})
 
 -- | MISC TAB |
 
