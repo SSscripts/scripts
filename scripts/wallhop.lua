@@ -82,78 +82,67 @@ local autoWallhop = false
 local wallhopCooldown = false
 local wallhopConn
 local wallhopDetectionRange = 4.0
+local wallhopClimbPower = Vector3.new(0, 42, 0)
 
-local function triggerProceduralWallKick(character, hitNormal)
+local function triggerAdvancedWallhopAnimation(character)
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
     local hrp = character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character:FindFirstChild("Humanoid")
-    if not hrp or not humanoid then return end
+    if not humanoid or not hrp then return end
 
-    -- 1. Parkour Physics Boost (More horizontal push, strong vertical)
-    local kickForce = Vector3.new(0, 60, 0) + (hitNormal * 15)
-    hrp.AssemblyLinearVelocity = kickForce
+    local animInfo = TweenInfo.new(0.15, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out, 0, true, 0)
+    local joints = {}
 
-    -- 2. Full-Body Procedural Kinematics
-    -- Tween parameters: 0.15s fast kick out, automatically reverses back smoothly
-    local kickInfo = TweenInfo.new(0.15, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out, 0, true, 0)
-    
-    local jointsToAnimate = {}
-
-    -- Safely map joints based on Rig Type (R15 vs R6)
     if humanoid.RigType == Enum.HumanoidRigType.R15 then
-        local lowerTorso = character:FindFirstChild("LowerTorso")
-        local upperTorso = character:FindFirstChild("UpperTorso")
-        if lowerTorso and upperTorso then
-            jointsToAnimate = {
-                Root = lowerTorso:FindFirstChild("Root"),
-                Waist = upperTorso:FindFirstChild("Waist"),
+        local lower = character:FindFirstChild("LowerTorso")
+        local upper = character:FindFirstChild("UpperTorso")
+        if lower and upper then
+            joints = {
+                Root = lower:FindFirstChild("Root"),
+                Waist = upper:FindFirstChild("Waist"),
                 RightHip = character:FindFirstChild("RightUpperLeg") and character.RightUpperLeg:FindFirstChild("RightHip"),
                 LeftHip = character:FindFirstChild("LeftUpperLeg") and character.LeftUpperLeg:FindFirstChild("LeftHip"),
-                RightShoulder = character:FindFirstChild("RightUpperArm") and character.RightUpperArm:FindFirstChild("RightShoulder"),
-                LeftShoulder = character:FindFirstChild("LeftUpperArm") and character.LeftUpperArm:FindFirstChild("LeftShoulder"),
-                Neck = character:FindFirstChild("Head") and character.Head:FindFirstChild("Neck")
+                RightArm = character:FindFirstChild("RightUpperArm") and character.RightUpperArm:FindFirstChild("RightShoulder"),
+                LeftArm = character:FindFirstChild("LeftUpperArm") and character.LeftUpperArm:FindFirstChild("LeftShoulder")
             }
         end
     else
         local torso = character:FindFirstChild("Torso")
         if torso then
-            jointsToAnimate = {
+            joints = {
                 Root = hrp:FindFirstChild("RootJoint"),
-                Waist = nil, -- R6 has no waist joint
                 RightHip = torso:FindFirstChild("Right Hip"),
                 LeftHip = torso:FindFirstChild("Left Hip"),
-                RightShoulder = torso:FindFirstChild("Right Shoulder"),
-                LeftShoulder = torso:FindFirstChild("Left Shoulder"),
-                Neck = torso:FindFirstChild("Neck")
+                RightArm = torso:FindFirstChild("Right Shoulder"),
+                LeftArm = torso:FindFirstChild("Left Shoulder")
             }
         end
     end
 
-    -- Define the realistic parkour pose modifications (CFrame Offsets)
-    local poseOffsets = {
-        Root = CFrame.Angles(math.rad(-15), 0, 0),             -- Lean whole body back slightly
-        Waist = CFrame.Angles(math.rad(-10), 0, 0),            -- Upper torso leans back further (R15 only)
-        RightHip = CFrame.Angles(math.rad(70), 0, 0),          -- Kicking leg comes aggressively up and forward
-        LeftHip = CFrame.Angles(math.rad(-25), 0, 0),          -- Trailing leg extends back for balance
-        LeftShoulder = CFrame.Angles(math.rad(60), 0, 0),      -- Opposite arm swings up and forward
-        RightShoulder = CFrame.Angles(math.rad(-45), 0, 0),    -- Same-side arm swings aggressively back
-        Neck = CFrame.Angles(math.rad(20), 0, 0)               -- Head tilts forward to counter the back-lean
+    local poses = {
+        Root = CFrame.Angles(math.rad(-20), math.rad(10), 0),
+        Waist = CFrame.Angles(math.rad(-15), 0, 0),
+        RightHip = CFrame.Angles(math.rad(65), 0, math.rad(-10)),
+        LeftHip = CFrame.Angles(math.rad(-30), 0, 0),
+        RightArm = CFrame.Angles(math.rad(45), math.rad(-20), 0),
+        LeftArm = CFrame.Angles(math.rad(-50), math.rad(20), 0)
     }
 
-    -- Apply Tweens to all valid joints
-    for jointName, joint in pairs(jointsToAnimate) do
-        if joint and poseOffsets[jointName] then
-            local originalC0 = joint.C0
-            local targetC0 = originalC0 * poseOffsets[jointName]
-            
-            -- Push the limb forward/back on the Z axis specifically for the kicking leg to simulate a bent knee planting
-            if jointName == "RightHip" then
-                targetC0 = targetC0 * CFrame.new(0, 0.3, -0.4) 
-            end
-
-            -- Create and play the tween
-            local tween = TweenService:Create(joint, kickInfo, {C0 = targetC0})
-            tween:Play()
+    for name, joint in pairs(joints) do
+        if joint and poses[name] then
+            local targetC0 = joint.C0 * poses[name]
+            TweenService:Create(joint, animInfo, {C0 = targetC0}):Play()
         end
+    end
+end
+
+local function triggerRhythmicWallhop(character, hrp, hitNormal, moveDir)
+    local tangent = (moveDir - (hitNormal * moveDir:Dot(hitNormal))).Unit
+    local climbVelocity = wallhopClimbPower + (tangent * 18) + (hitNormal * 5)
+    hrp.AssemblyLinearVelocity = climbVelocity
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end
 
@@ -170,12 +159,9 @@ local function startAutoWallhop()
         rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
         local moveDir = Humanoid.MoveDirection
-        
-        -- === DETECTION SETTINGS ===
-        local spread = 1.2 -- (How wide the corner detection is)
-        
         local rightVector = CFrame.lookAt(Vector3.zero, moveDir).RightVector
         
+        local spread = 1.4
         local origins = {
             Center = hrp.Position,
             Left = hrp.Position - (rightVector * spread),
@@ -183,31 +169,32 @@ local function startAutoWallhop()
         }
 
         local legOffset = (Humanoid.RigType == Enum.HumanoidRigType.R15) and 2 or 2.5
-        local hitNormal = nil
-        local validSeamDetected = false
+        local validWallFound = false
+        local detectedNormal = nil
 
         for _, origin in pairs(origins) do
-            -- Uses the global wallhopDetectionRange controlled by the slider
-            local torsoRay = Workspace:Raycast(origin, moveDir * wallhopDetectionRange, rayParams)
-            local legRay = Workspace:Raycast(origin - Vector3.new(0, legOffset, 0), moveDir * wallhopDetectionRange, rayParams)
+            local angledDir = (moveDir + (rightVector * 0.3)).Unit
+            local torsoRay = Workspace:Raycast(origin, angledDir * wallhopDetectionRange, rayParams)
+            local legRay = Workspace:Raycast(origin - Vector3.new(0, legOffset, 0), angledDir * wallhopDetectionRange, rayParams)
 
             if torsoRay and torsoRay.Instance and torsoRay.Instance.CanCollide then
                 local legHitInstance = legRay and legRay.Instance or nil
                 
                 if torsoRay.Instance ~= legHitInstance then
-                    validSeamDetected = true
-                    hitNormal = torsoRay.Normal
-                    break 
+                    validWallFound = true
+                    detectedNormal = torsoRay.Normal
+                    break
                 end
             end
         end
 
-        if validSeamDetected and hitNormal then
+        if validWallFound and detectedNormal then
             wallhopCooldown = true
             
-            triggerProceduralWallKick(Character, hitNormal)
+            triggerRhythmicWallhop(Character, hrp, detectedNormal, moveDir)
+            triggerAdvancedWallhopAnimation(Character)
             
-            task.delay(0.6, function()
+            task.delay(0.35, function()
                 wallhopCooldown = false
             end)
         end
@@ -223,7 +210,7 @@ end
 
 -- Wallhop Toggle
 ToggleWallhop = HomeTab:CreateToggle({
-    Name = "Auto Wallhop (Procedural Parkour)",
+    Name = "Auto Wallhop (Rhythmic Engine)",
     CurrentValue = false,
     Flag = "AutoWallhopToggle",
     Callback = function(Value)
@@ -236,13 +223,13 @@ ToggleWallhop = HomeTab:CreateToggle({
     end,
 })
 
--- Wallhop Detection Range Slider
+-- Wallhop Detection Slider
 HomeTab:CreateSlider({
-    Name = "Wallhop Range",
+    Name = "Wallhop Detection Range",
     Range = {1, 10},
     Increment = 0.5,
     Suffix = "Studs",
-    CurrentValue = 4.0,
+    CurrentValue = wallhopDetectionRange,
     Flag = "WallhopRangeSlider",
     Callback = function(Value)
         wallhopDetectionRange = Value
