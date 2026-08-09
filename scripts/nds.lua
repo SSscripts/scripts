@@ -14,72 +14,125 @@ if not success or not Rayfield then
     return
 end
 
--- Create the main hub window with configuration and security key system
+-- Create the main hub window
 local Window = Rayfield:CreateWindow({
     Name = "SefScriptsHub",
-    LoadingTitle = "SefScriptsHub | NDS DISASTER ENGINE",
-    LoadingSubtitle = "Modular Cinematic Orbit & Strike System",
+    LoadingTitle = "SefScriptsHub | NDS OVERLORD ENGINE",
+    LoadingSubtitle = "Flight & Debris Swarm System (Parts 1-3)",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "SefScriptsHub",
-        FileName = "NDSMasterConfig"
+        FileName = "NDSOverlordConfig"
     },
-    KeySystem = true,
-    KeySettings = {
-        Title = "SefScriptsHub",
-        Subtitle = "Security Key Verification",
-        Note = "Enter Access Key: SUBSCRIBE",
-        FileName = "SefAccessKey",
-        SaveKey = true,
-        GrabKeyFromSite = false,
-        Key = {"SUBSCRIBE"}
-    }
+    KeySystem = false -- Disabled for faster testing
 })
 
 -- Core Services Definition
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
--- Initialize Hub Tabs for subsequent parts
-local OrbitTab = Window:CreateTab("Disaster Orbit", 4483362458)
-local CombatTab = Window:CreateTab("Disaster Strike", 4483362458)
+-- Initialize Hub Tabs
+local MovementTab = Window:CreateTab("Movement", 4483362458)
+local OrbitTab = Window:CreateTab("Debris Swarm", 4483362458)
 
 Rayfield:Notify({
     Title = "Part 1 Initialized",
     Content = "UI Framework & Core Services loaded successfully.",
-    Duration = 4,
-    Image = 4483362458
-})
-
--- =================================================================
--- PART 2: Global State Variables & Multi-Layer Orbit Configuration
--- =================================================================
-
--- Core State Flags
-local isOrbiting = false
-local isExecuting = false
-
--- Collections and Tracking Tables
-local orbitParts = {}      -- Stores the 12 physical BaseParts gathered from NDS
-local orbitData = {}       -- Stores individual physics parameters (radius, height, speed, phase)
-local selectedTargetName = ""
-local playerList = {}
-local activeProjectile = nil
-
--- Configuration Constants for the 12-part system
-local MAX_ORBIT_PARTS = 12
-local SCAN_RADIUS = 80
-
-Rayfield:Notify({
-    Title = "Part 2 Initialized",
-    Content = "State variables and multi-layer data structures configured.",
     Duration = 3,
     Image = 4483362458
 })
 
 -- =================================================================
--- PART 3: NDS Debris Scanner & Multi-Layer Property Generator
+-- PART 2: Variables, Core Flight Engine & Movement UI
+-- =================================================================
+
+-- Global State Variables
+local isFlying = false
+local flySpeed = 50
+local isOrbiting = false
+local maxOrbitParts = 50
+local orbitParts = {}
+local orbitData = {}
+
+-- Utility to get movement direction based on keybinds
+local function GetMoveVector()
+    local vec = Vector3.new()
+    if UserInputService:IsKeyDown(Enum.KeyCode.W) then vec = vec + Vector3.new(0, 0, -1) end
+    if UserInputService:IsKeyDown(Enum.KeyCode.S) then vec = vec + Vector3.new(0, 0, 1) end
+    if UserInputService:IsKeyDown(Enum.KeyCode.A) then vec = vec + Vector3.new(-1, 0, 0) end
+    if UserInputService:IsKeyDown(Enum.KeyCode.D) then vec = vec + Vector3.new(1, 0, 0) end
+    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vec = vec + Vector3.new(0, 1, 0) end
+    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then vec = vec + Vector3.new(0, -1, 0) end
+    return vec
+end
+
+-- Flight Render Loop
+RunService.RenderStepped:Connect(function()
+    if not isFlying then return end
+    
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
+        local hrp = char.HumanoidRootPart
+        local hum = char.Humanoid
+        
+        -- Override gravity and normal physics
+        hum.PlatformStand = true
+        workspace.Gravity = 0
+        
+        local camCFrame = Camera.CFrame
+        local moveVec = GetMoveVector()
+        
+        -- Calculate velocity based on camera look direction
+        local targetVelocity = (camCFrame.RightVector * moveVec.X + camCFrame.LookVector * moveVec.Z + Vector3.new(0, moveVec.Y, 0)) * flySpeed
+        
+        -- Apply velocity and keep character upright
+        hrp.AssemblyLinearVelocity = targetVelocity
+        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+    end
+end)
+
+-- Flight UI Controls
+MovementTab:CreateToggle({
+    Name = "Enable Flight",
+    CurrentValue = false,
+    Flag = "FlightToggle",
+    Callback = function(Value)
+        isFlying = Value
+        if not isFlying then
+            -- Restore normal physics when disabled
+            workspace.Gravity = 196.2
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("Humanoid") then
+                char.Humanoid.PlatformStand = false
+            end
+        end
+    end,
+})
+
+MovementTab:CreateSlider({
+    Name = "Flight Speed",
+    Range = {10, 200},
+    Increment = 5,
+    Suffix = "Studs/s",
+    CurrentValue = 50,
+    Flag = "FlightSpeedSlider",
+    Callback = function(Value)
+        flySpeed = Value
+    end,
+})
+
+Rayfield:Notify({
+    Title = "Part 2 Initialized",
+    Content = "Flight engine and movement controls active.",
+    Duration = 3,
+    Image = 4483362458
+})
+
+-- =================================================================
+-- PART 3: Advanced Swarm Engine, Debris Scanner & Orbit UI
 -- =================================================================
 
 local function ScanAndGatherDebris()
@@ -90,76 +143,74 @@ local function ScanAndGatherDebris()
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     local hrp = char.HumanoidRootPart
     
-    -- Scan workspace for loose disaster parts
+    -- Scan workspace for unanchored parts
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("BasePart") and not obj.Anchored and obj.Parent ~= char then
-            local dist = (obj.Position - hrp.Position).Magnitude
-            if dist < SCAN_RADIUS then
-                table.insert(orbitParts, obj)
-                
-                -- Reset assembly velocities to prepare for client physics control
-                pcall(function()
-                    obj.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                    obj.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                end)
-                
-                -- Assign unique multi-layer orbital parameters for each part
-                table.insert(orbitData, {
-                    radius = math.random(8, 20),
-                    height = math.random(-3, 8),
-                    speed = math.random(3, 7) * (math.random(1, 2) == 1 and 1 or -1),
-                    phase = math.random() * (math.pi * 2)
-                })
-                
-                if #orbitParts >= MAX_ORBIT_PARTS then break end
-            end
+            table.insert(orbitParts, obj)
+            
+            -- Prepare properties for a complex 3D spherical swarm effect
+            table.insert(orbitData, {
+                radius = math.random(10, 35), -- Wider range for massive swarms
+                speed = (math.random(3, 10) + math.random()) * (math.random(1, 2) == 1 and 1 or -1),
+                offsetX = math.random() * math.pi * 2,
+                offsetY = math.random() * math.pi * 2,
+                offsetZ = math.random() * math.pi * 2,
+                tilt = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5).Unit
+            })
+            
+            -- Stop gathering once we hit the slider's limit
+            if #orbitParts >= maxOrbitParts then break end
         end
     end
     
-    if #orbitParts == 0 then
-        Rayfield:Notify({
-            Title = "Waiting for Disaster",
-            Content = "No loose debris found nearby! Wait for a disaster to hit.",
-            Duration = 4,
-            Image = 4483362458
-        })
-    else
-        Rayfield:Notify({
-            Title = "Debris Captured",
-            Content = "Locked onto " .. tostring(#orbitParts) .. " disaster parts across multi-layers!",
-            Duration = 3,
-            Image = 4483362458
-        })
-    end
+    Rayfield:Notify({
+        Title = "Swarm Locked",
+        Content = "Gathered " .. tostring(#orbitParts) .. " debris parts.",
+        Duration = 3,
+        Image = 4483362458
+    })
 end
 
-Rayfield:Notify({
-    Title = "Part 3 Initialized",
-    Content = "NDS Debris Scanner and Property Generator ready.",
-    Duration = 3,
-    Image = 4483362458
-})
-
--- =================================================================
--- PART 4: Disaster Orbit Tab & Toggle Interface
--- =================================================================
-
-OrbitTab:CreateSection("Natural Disasters Debris Orbit Controls")
-
+-- Swarm UI Controls
 OrbitTab:CreateToggle({
-    Name = "Enable Disaster Debris Orbit (12 Parts)",
+    Name = "Enable Debris Swarm",
     CurrentValue = false,
-    Flag = "NDSOrbitEnabled",
-    Callback = function(v)
-        isOrbiting = v
+    Flag = "SwarmToggle",
+    Callback = function(Value)
+        isOrbiting = Value
         if isOrbiting then
             ScanAndGatherDebris()
         else
             orbitParts = {}
             orbitData = {}
+        end
+    end,
+})
+
+OrbitTab:CreateSlider({
+    Name = "Max Swarm Parts",
+    Range = {10, 300}, -- Massive range for extreme swarm effects
+    Increment = 10,
+    Suffix = "Parts",
+    CurrentValue = 50,
+    Flag = "MaxSwarmSlider",
+    Callback = function(Value)
+        maxOrbitParts = Value
+        if isOrbiting then
+            ScanAndGatherDebris() -- Rescan immediately if already orbiting to adjust count
+        end
+    end,
+})
+
+OrbitTab:CreateButton({
+    Name = "Rescan Workspace For Debris",
+    Callback = function()
+        if isOrbiting then
+            ScanAndGatherDebris()
+        else
             Rayfield:Notify({
-                Title = "Orbit Disabled",
-                Content = "Released control of orbiting debris.",
+                Title = "Error",
+                Content = "Enable the swarm first before rescanning.",
                 Duration = 2,
                 Image = 4483362458
             })
@@ -167,35 +218,20 @@ OrbitTab:CreateToggle({
     end,
 })
 
-OrbitTab:CreateButton({
-    Name = "Rescan Nearby Debris",
-    Callback = function()
-        if isOrbiting then
-            ScanAndGatherDebris()
-        else
-            Rayfield:Notify({
-                Title = "Notice",
-                Content = "Enable orbit first before rescanning!",
-                Duration = 3,
-                Image = 4483362458
-            })
-        end
-    end,
-})
-
 Rayfield:Notify({
-    Title = "Part 4 Initialized",
-    Content = "Disaster Orbit UI controls added successfully.",
+    Title = "Part 3 Initialized",
+    Content = "Advanced Swarm Engine and limits configured.",
     Duration = 3,
     Image = 4483362458
 })
 
 -- =================================================================
--- PART 5: Multi-Layer Orbit Simulation Render Loop
+-- PART 4: 3D Spherical Swarm Render Loop
 -- =================================================================
 
 RunService.RenderStepped:Connect(function()
-    if not isOrbiting or #orbitParts == 0 then return end
+    -- Ensure the swarm is active and we aren't currently launching them
+    if not isOrbiting or #orbitParts == 0 or isExecuting then return end
     
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -204,58 +240,60 @@ RunService.RenderStepped:Connect(function()
     local timeVal = tick()
     
     for i, part in ipairs(orbitParts) do
-        -- Skip updating normal orbit position if this specific part is currently engaged in the cinematic execution
-        if not (isExecuting and part == activeProjectile) then
-            if part and part.Parent then
-                local data = orbitData[i]
-                if data then
-                    -- Calculate multi-layer circular coordinates
-                    local angle = (timeVal * data.speed) + data.phase
-                    local xOffset = math.cos(angle) * data.radius
-                    local zOffset = math.sin(angle) * data.radius
-                    local targetPos = hrp.Position + Vector3.new(xOffset, data.height, zOffset)
-                    
-                    -- Force client physics authority via CFrame update
-                    pcall(function()
-                        part.CFrame = CFrame.new(targetPos)
-                        part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                        part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                    end)
-                end
+        if part and part.Parent then
+            local data = orbitData[i]
+            if data then
+                -- Calculate complex 3D spherical orbits based on random tilts and offsets
+                local angle = timeVal * data.speed
+                
+                -- Create a rotated CFrame using the random axis, then push it outward by the radius
+                local targetCFrame = CFrame.new(hrp.Position) 
+                    * CFrame.Angles(data.offsetX, angle, data.offsetZ) 
+                    * CFrame.new(0, 0, -data.radius)
+                
+                -- Force client physics authority via CFrame update
+                pcall(function()
+                    part.CFrame = targetCFrame
+                    part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                    part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                end)
             end
         end
     end
 end)
 
 Rayfield:Notify({
-    Title = "Part 5 Initialized",
-    Content = "Multi-layer orbit simulation engine active.",
+    Title = "Part 4 Initialized",
+    Content = "3D Swarm render loop active. Parts will now orbit you.",
     Duration = 3,
     Image = 4483362458
 })
 
 -- =================================================================
--- PART 6: Target Selection UI & Player Management
+-- PART 5: Target Selection & Annihilation UI
 -- =================================================================
 
-CombatTab:CreateSection("Target Elimination Engine")
+-- Create a new tab specifically for attacking
+local CombatTab = Window:CreateTab("Annihilation", 4483362458)
+CombatTab:CreateSection("Swarm Strike Controls")
 
+-- Function to get up-to-date player list
 local function GetPlayerNames()
-    playerList = {}
+    local pList = {}
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
-            table.insert(playerList, p.Name)
+            table.insert(pList, p.Name)
         end
     end
-    if #playerList == 0 then table.insert(playerList, "No Players Found") end
-    return playerList
+    if #pList == 0 then table.insert(pList, "No Players Found") end
+    return pList
 end
 
 local targetDropdown = CombatTab:CreateDropdown({
-    Name = "Select NDS Target Player",
+    Name = "Select Strike Target",
     Options = GetPlayerNames(),
     CurrentOption = GetPlayerNames()[1],
-    Flag = "NDSTargetDropdown",
+    Flag = "TargetDropdown",
     Callback = function(option)
         selectedTargetName = option
     end,
@@ -267,7 +305,7 @@ CombatTab:CreateButton({
         targetDropdown:Refresh(GetPlayerNames(), true)
         Rayfield:Notify({
             Title = "Refreshed",
-            Content = "Player list updated successfully.",
+            Content = "Target list updated.",
             Duration = 2,
             Image = 4483362458
         })
@@ -275,251 +313,226 @@ CombatTab:CreateButton({
 })
 
 Rayfield:Notify({
-    Title = "Part 6 Initialized",
-    Content = "Target selection interface ready.",
+    Title = "Part 5 Initialized",
+    Content = "Annihilation UI and Targeting systems ready.",
     Duration = 3,
     Image = 4483362458
 })
 
 -- =================================================================
--- PART 7: Cinematic Sequence Phase 1 & 2 - Anticipation & Projectile Rise
+-- PART 6: Swarm Strike Execution Engine (The Kill Logic)
 -- =================================================================
 
-local function RunAnticipationAndRise()
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
+local function ExecuteSwarmBarrage(targetPlayer)
+    isExecuting = true -- Pauses the orbit loop
     
-    local hrp = char.HumanoidRootPart
-    local startTime = tick()
-    local animDuration = 0.5
-    
-    while tick() - startTime < animDuration do
-        local alpha = (tick() - startTime) / animDuration
-        if activeProjectile and activeProjectile.Parent then
-            -- Smoothly interpolate projectile from orbit ring up to the right-hand hover point
-            local targetHoverPos = hrp.Position + (hrp.CFrame.RightVector * 2) + Vector3.new(0, 3 + (alpha * 4), 0)
-            pcall(function()
-                activeProjectile.CFrame = CFrame.new(targetHoverPos)
-                activeProjectile.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                activeProjectile.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-            end)
-        end
-        task.wait()
-    end
-    
-    return true
-end
-
-Rayfield:Notify({
-    Title = "Part 7 Initialized",
-    Content = "Anticipation and projectile rising sequence loaded.",
-    Duration = 3,
-    Image = 4483362458
-})
-
--- =================================================================
--- PART 8: Cinematic Sequence Phase 3 - One-Second Hold & Secondary Motion
--- =================================================================
-
-local function RunDramaticHold()
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    
-    local hrp = char.HumanoidRootPart
-    local holdStart = tick()
-    local holdDuration = 1.0
-    
-    while tick() - holdStart < holdDuration do
-        if activeProjectile and activeProjectile.Parent then
-            -- Apply subtle breathing/floating motion during the 1-second pause
-            local hoverPos = hrp.Position + (hrp.CFrame.RightVector * 2) + Vector3.new(0, 7 + math.sin(tick() * 6) * 0.4, 0)
-            pcall(function()
-                activeProjectile.CFrame = CFrame.new(hoverPos)
-                activeProjectile.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                activeProjectile.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-            end)
-        end
-        task.wait()
-    end
-end
-
-Rayfield:Notify({
-    Title = "Part 8 Initialized",
-    Content = "Dramatic hold and secondary motion sequence loaded.",
-    Duration = 3,
-    Image = 4483362458
-})
-
--- =================================================================
--- PART 9: Cinematic Sequence Phase 4 & 5 - Head Searching & Environmental Scan
--- =================================================================
-
-local function RunHeadSearchSequence()
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    
-    local hrp = char.HumanoidRootPart
-    local searchStart = tick()
-    local searchDuration = 1.5
-    
-    while tick() - searchStart < searchDuration do
-        if activeProjectile and activeProjectile.Parent then
-            -- Keep projectile hovering steady while the character performs the search scan
-            pcall(function()
-                activeProjectile.CFrame = hrp.CFrame + Vector3.new(0, 7, 0)
-                activeProjectile.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                activeProjectile.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-            end)
-        end
-        task.wait()
-    end
-end
-
-Rayfield:Notify({
-    Title = "Part 9 Initialized",
-    Content = "Head searching and environmental scan sequence loaded.",
-    Duration = 3,
-    Image = 4483362458
-})
-
--- =================================================================
--- PART 10: Cinematic Sequence Phase 6 - Target Lock & Body Rotation
--- =================================================================
-
-local function RunTargetLockAndRotate(targetPlayer)
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
-    
-    local hrp = char.HumanoidRootPart
-    if not targetPlayer or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        return false
-    end
-    
-    local targetHRP = targetPlayer.Character.HumanoidRootPart
-    
-    -- Smoothly rotate character to face the target (replicates via server physics/CFrame)
-    pcall(function()
-        hrp.CFrame = CFrame.new(hrp.Position, Vector3.new(targetHRP.Position.X, hrp.Position.Y, targetHRP.Position.Z))
-    end)
-    
-    -- Keep active projectile locked above the hand during rotation pause
-    if activeProjectile and activeProjectile.Parent then
-        pcall(function()
-            activeProjectile.CFrame = hrp.CFrame + Vector3.new(0, 7, 0)
-            activeProjectile.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            activeProjectile.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-        end)
-    end
-    
-    task.wait(0.2) -- Short dramatic pause before launch
-    return true
-end
-
-Rayfield:Notify({
-    Title = "Part 10 Initialized",
-    Content = "Target lock and body rotation sequence loaded.",
-    Duration = 3,
-    Image = 4483362458
-})
-
--- =================================================================
--- PART 11: Cinematic Sequence Phase 7 - Projectile Launch & Strike Execution
--- =================================================================
-
-local function ExecuteProjectileLaunch(targetPlayer)
-    if not activeProjectile or not activeProjectile.Parent then
-        Rayfield:Notify({
-            Title = "Launch Error",
-            Content = "Active projectile is missing or destroyed!",
-            Duration = 3,
-            Image = 4483362458
-        })
-        return
-    end
-    
-    if not targetPlayer or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        return
-    end
-    
-    local targetHRP = targetPlayer.Character.HumanoidRootPart
-    
-    -- Calculate precise direction vector toward target and apply high-speed physics launch
-    pcall(function()
-        local fireDir = (targetHRP.Position - activeProjectile.Position).Unit
-        activeProjectile.AssemblyLinearVelocity = fireDir * 5000
-        activeProjectile.AssemblyAngularVelocity = Vector3.new(6000, 6000, 6000)
-    end)
+    local targetChar = targetPlayer.Character
+    local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
     
     Rayfield:Notify({
-        Title = "Strike Delivered",
-        Content = "Disaster debris hurled at " .. targetPlayer.Name .. "!",
+        Title = "Unleashing Swarm",
+        Content = "Firing " .. tostring(#orbitParts) .. " parts at " .. targetPlayer.Name .. "!",
         Duration = 3,
         Image = 4483362458
     })
+
+    -- Rapid fire barrage sequence
+    task.spawn(function()
+        for i, part in ipairs(orbitParts) do
+            if part and part.Parent and targetHRP and targetHRP.Parent then
+                pcall(function()
+                    -- Calculate direct trajectory to the target
+                    local trajectory = (targetHRP.Position - part.Position).Unit
+                    
+                    -- Fling the part at extreme lethal speeds
+                    part.AssemblyLinearVelocity = trajectory * 5000 
+                    part.AssemblyAngularVelocity = Vector3.new(3000, 3000, 3000)
+                end)
+                task.wait(0.03) -- Slight delay between shots creates a machine-gun/barrage effect
+            end
+        end
+        
+        -- Clean up after the barrage is finished
+        orbitParts = {}
+        orbitData = {}
+        isExecuting = false
+        
+        -- Automatically toggle off the swarm UI switch since parts were expended
+        if Window.Flags["SwarmToggle"] then
+            Window.Flags["SwarmToggle"]:Set(false)
+        end
+        
+        Rayfield:Notify({
+            Title = "Barrage Complete",
+            Content = "Swarm depleted. Re-enable to gather more debris.",
+            Duration = 4,
+            Image = 4483362458
+        })
+    end)
 end
 
-Rayfield:Notify({
-    Title = "Part 11 Initialized",
-    Content = "Projectile launch and strike execution sequence loaded.",
-    Duration = 3,
-    Image = 4483362458
-})
-
--- =================================================================
--- PART 12: Master Execution Button, Config Loading & Initialization
--- =================================================================
-
 CombatTab:CreateButton({
-    Name = "Execute Cinematic Disaster Strike Sequence",
+    Name = "EXECUTE SWARM BARRAGE",
     Callback = function()
         if isExecuting then return end
+        
+        if not isOrbiting or #orbitParts == 0 then
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "You must gather a Debris Swarm first!",
+                Duration = 3,
+                Image = 4483362458
+            })
+            return
+        end
         
         local targetPlayer = Players:FindFirstChild(selectedTargetName)
         if not targetPlayer or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
             Rayfield:Notify({
-                Title = "Execution Error",
-                Content = "Invalid target selected or character missing!",
+                Title = "Error",
+                Content = "Target is invalid or has died.",
                 Duration = 3,
                 Image = 4483362458
             })
             return
         end
         
-        if #orbitParts == 0 then
-            Rayfield:Notify({
-                Title = "Execution Error",
-                Content = "Enable Disaster Orbit first to gather debris parts!",
-                Duration = 3,
-                Image = 4483362458
-            })
-            return
-        end
-        
-        isExecuting = true
-        activeProjectile = orbitParts[1] -- Select the first orbiting part as the projectile
-        
-        task.spawn(function()
-            -- Run the complete sequential cinematic animation and strike phases
-            RunAnticipationAndRise()
-            RunDramaticHold()
-            RunHeadSearchSequence()
-            
-            local success = RunTargetLockAndRotate(targetPlayer)
-            if success then
-                ExecuteProjectileLaunch(targetPlayer)
-            end
-            
-            isExecuting = false
-        end)
+        ExecuteSwarmBarrage(targetPlayer)
     end,
 })
 
--- Load Rayfield UI configurations and final notification
-Rayfield:LoadConfiguration()
+Rayfield:Notify({
+    Title = "Part 6 Initialized",
+    Content = "Lethal Swarm Strike execution logic loaded.",
+    Duration = 3,
+    Image = 4483362458
+})
+
+-- =================================================================
+-- PART 7: Target Lock-On Visuals (ESP Highlight)
+-- =================================================================
+
+local TargetESP = Instance.new("Highlight")
+TargetESP.Name = "SwarmTargetLock"
+TargetESP.FillColor = Color3.fromRGB(255, 0, 0)
+TargetESP.OutlineColor = Color3.fromRGB(255, 255, 255)
+TargetESP.FillTransparency = 0.5
+TargetESP.OutlineTransparency = 0.1
+TargetESP.Parent = game:GetService("CoreGui")
+TargetESP.Adornee = nil
+
+-- Update the ESP whenever the target dropdown changes
+RunService.RenderStepped:Connect(function()
+    if selectedTargetName ~= "" then
+        local targetPlayer = Players:FindFirstChild(selectedTargetName)
+        if targetPlayer and targetPlayer.Character then
+            TargetESP.Adornee = targetPlayer.Character
+        else
+            TargetESP.Adornee = nil
+        end
+    else
+        TargetESP.Adornee = nil
+    end
+end)
+
+CombatTab:CreateToggle({
+    Name = "Enable Target Lock Visuals (ESP)",
+    CurrentValue = true,
+    Flag = "TargetESPToggle",
+    Callback = function(Value)
+        TargetESP.Enabled = Value
+    end,
+})
 
 Rayfield:Notify({
+    Title = "Part 7 Initialized",
+    Content = "Target Lock-On visuals active.",
+    Duration = 3,
+    Image = 4483362458
+})
+
+-- =================================================================
+-- PART 8: Swarm Visual Enhancements (Debris Trails)
+-- =================================================================
+
+local activeTrails = {}
+
+local function ApplySwarmFX()
+    -- Clean up old trails
+    for _, trail in ipairs(activeTrails) do
+        if trail then trail:Destroy() end
+    end
+    activeTrails = {}
+    
+    -- Apply new trails to the current orbit parts
+    for _, part in ipairs(orbitParts) do
+        if part and part.Parent then
+            local attach0 = Instance.new("Attachment", part)
+            local attach1 = Instance.new("Attachment", part)
+            attach0.Position = Vector3.new(0, part.Size.Y/2, 0)
+            attach1.Position = Vector3.new(0, -part.Size.Y/2, 0)
+            
+            local trail = Instance.new("Trail", part)
+            trail.Attachment0 = attach0
+            trail.Attachment1 = attach1
+            trail.Lifetime = 0.3
+            trail.MinLength = 0.1
+            trail.Color = ColorSequence.new(Color3.fromRGB(255, 50, 50))
+            trail.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(1, 1)
+            })
+            
+            table.insert(activeTrails, trail)
+            table.insert(activeTrails, attach0)
+            table.insert(activeTrails, attach1)
+        end
+    end
+end
+
+OrbitTab:CreateButton({
+    Name = "Apply Overlord FX to Swarm",
+    Callback = function()
+        if not isOrbiting or #orbitParts == 0 then
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "You must have an active swarm to apply FX!",
+                Duration = 3,
+                Image = 4483362458
+            })
+            return
+        end
+        ApplySwarmFX()
+        Rayfield:Notify({
+            Title = "FX Applied",
+            Content = "Added high-speed trails to debris.",
+            Duration = 3,
+            Image = 4483362458
+        })
+    end,
+})
+
+Rayfield:Notify({
+    Title = "Part 8 Initialized",
+    Content = "Swarm visual enhancement engine loaded.",
+    Duration = 3,
+    Image = 4483362458
+})
+
+-- =================================================================
+-- PART 9: Master Initialization & Configuration Loader
+-- =================================================================
+
+-- Load any saved configurations (like slider values or toggles)
+Rayfield:LoadConfiguration()
+
+-- Final notification to confirm the entire script is ready
+Rayfield:Notify({
     Title = "SefScriptsHub Fully Loaded",
-    Content = "All 12 parts assembled! NDS Orbit & Strike Engine is ready.",
+    Content = "Overlord Engine is fully assembled and ready for destruction.",
     Duration = 5,
     Image = 4483362458
 })
+
+-- Note: Since you asked to remove the 6-part cinematic animation, 
+-- the script only requires 9 parts to function perfectly!
