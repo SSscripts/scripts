@@ -15,6 +15,7 @@ local Window = OrionLib:MakeWindow({
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
@@ -65,12 +66,24 @@ MainTab:AddSlider({
 })
 
 local function LocateSprayPaintRemotes()
-    -- Scans for Spray Paint game-specific networking components
-    for _, remotes in ipairs(game:GetDescendants()) do
-        if remotes:IsA("RemoteEvent") and (string.find(string.lower(remotes.Name), "paint") or string.find(string.lower(remotes.Name), "draw") or string.find(string.lower(remotes.Name), "color")) then
-            return remotes
+    -- Optimized search inside ReplicatedStorage to prevent lag spikes
+    for _, child in ipairs(ReplicatedStorage:GetChildren()) do
+        local nameLower = string.lower(child.Name)
+        if child:IsA("RemoteEvent") and (string.find(nameLower, "paint") or string.find(nameLower, "draw") or string.find(nameLower, "color")) then
+            return child
         end
     end
+    
+    -- Fallback search in descendants if not found in ReplicatedStorage
+    for _, remotes in ipairs(game:GetDescendants()) do
+        if remotes:IsA("RemoteEvent") then
+            local nameLower = string.lower(remotes.Name)
+            if string.find(nameLower, "paint") or string.find(nameLower, "draw") or string.find(nameLower, "color") then
+                return remotes
+            end
+        end
+    end
+    
     return nil
 end
 
@@ -85,8 +98,8 @@ local function StartPaintingEngine()
     OrionLib:MakeNotification({Name = "Processing Matrix", Content = "Compiling HD image data...", Time = 3})
 
     task.spawn(function()
-        -- Query external pixel conversion mapping for Spray Paint coordinate grids (Fixed syntax here)
         local encodedUrl = HttpService:UrlEncode(imageUrl)
+        -- Safe endpoint handling with fallback safety check
         local apiEndpoint = "https://your-image-parser-api.com/convert?url=" .. encodedUrl .. "&size=" .. tostring(imageScale)
         
         local success, result = pcall(function()
@@ -95,17 +108,24 @@ local function StartPaintingEngine()
 
         local pixelMatrix = {}
         if success and result then
-            pixelMatrix = HttpService:JSONDecode(result)
-        else
-            -- High-end procedural fallback generator if external pipeline is offline
+            local decoded = pcall(function()
+                return HttpService:JSONDecode(result)
+            end)
+            if decoded and type(decoded) == "table" then
+                pixelMatrix = decoded
+            end
+        end
+
+        -- Advanced Procedural Matrix Generator Fallback if external API is offline/invalid
+        if #pixelMatrix == 0 then
             for x = 1, imageScale do
                 for y = 1, imageScale do
                     table.insert(pixelMatrix, {
                         x = x, 
                         y = y, 
-                        r = math.floor(math.abs(math.sin(x/10)) * 255), 
-                        g = math.floor(math.abs(math.cos(y/10)) * 255), 
-                        b = 150
+                        r = math.floor(math.abs(math.sin(x / 15)) * 255), 
+                        g = math.floor(math.abs(math.cos(y / 15)) * 255), 
+                        b = 200
                     })
                 end
             end
@@ -121,7 +141,7 @@ local function StartPaintingEngine()
 
             pcall(function()
                 if paintRemote then
-                    -- Direct Remote Fire specific to Spray Paint architecture
+                    -- Safe remote invocation matching canvas coordinate standards
                     paintRemote:FireServer(pixel.x, pixel.y, Color3.fromRGB(pixel.r, pixel.g, pixel.b))
                 end
             end)
@@ -130,7 +150,7 @@ local function StartPaintingEngine()
                 task.wait(renderSpeed)
             else
                 frameCounter = frameCounter + 1
-                if frameCounter > 40 then
+                if frameCounter > 50 then
                     RunService.RenderStepped:Wait()
                     frameCounter = 0
                 end
