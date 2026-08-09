@@ -1,5 +1,5 @@
 -- =================================================================
--- SPRAY PAINT ULTIMATE HD AUTO-DRAW ENGINE | ORION LIBRARY
+-- SPRAY PAINT ULTIMATE HD AUTO-DRAW ENGINE | ORION LIBRARY (FIXED)
 -- =================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -85,9 +85,9 @@ local function StartPaintingEngine()
     OrionLib:MakeNotification({Name = "Processing Matrix", Content = "Compiling HD image data...", Time = 3})
 
     task.spawn(function()
-        -- Query external pixel conversion mapping for Spray Paint coordinate grids
+        -- Query external pixel conversion mapping for Spray Paint coordinate grids (Fixed syntax here)
         local encodedUrl = HttpService:UrlEncode(imageUrl)
-        local apiEndpoint = "https://your-image-parser-api.com/convert?url=" .. encodedUrl & "&size=" .. tostring(imageScale)
+        local apiEndpoint = "https://your-image-parser-api.com/convert?url=" .. encodedUrl .. "&size=" .. tostring(imageScale)
         
         local success, result = pcall(function()
             return game:HttpGet(apiEndpoint)
